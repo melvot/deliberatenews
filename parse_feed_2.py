@@ -3,7 +3,7 @@ import re
 import requests
 import anthropic
 from datetime import datetime, timedelta
-from htpy import body, h1, h2, head, html, li, title, ul, a, span
+from htpy import body, h1, h2, head, html, li, meta, title, ul, a, span, style
 
 url_kagi = "https://kite.kagi.com/"
 
@@ -152,9 +152,24 @@ def parse_cluster_response(raw_text, all_stories):
     return result
 
 
+CSS = """
+    body { font-family: system-ui, sans-serif; max-width: 680px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1   { font-size: 1.2rem; color: #555; font-weight: normal; margin-bottom: 2rem; }
+    h2   { font-size: 1rem; text-transform: uppercase; letter-spacing: .05em; color: #888; margin: 2rem 0 .5rem; }
+    ul   { margin: 0; padding: 0; list-style: none; }
+    li   { padding: .35rem 0; border-bottom: 1px solid #eee; line-height: 1.4; }
+    a    { color: #111; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .date { font-size: .8rem; color: #aaa; white-space: nowrap; }
+"""
+
 def page_content_clustered(clusters):
     return html[
-        head[title["News from Kagi — By Topic"]],
+        head[
+            title["News from Kagi — By Topic"],
+            meta(name="viewport", content="width=device-width, initial-scale=1"),
+            style[CSS],
+        ],
         body[
             h1["News from Kagi — By Topic"],
             (
@@ -167,7 +182,7 @@ def page_content_clustered(clusters):
                                   target="_blank",
                                   rel="noopener noreferrer")[story["title"]],
                                 " ",
-                                span(style="color: grey")[f"({story['date']})"],
+                                span(".date")[story["date"]],
                             ]
                             for story in cluster["stories"]
                         )
