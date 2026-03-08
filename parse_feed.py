@@ -166,12 +166,12 @@ CSS = """
 def page_content_clustered(clusters):
     return html[
         head[
-            title["News from Kagi — By Topic"],
+            title["News from Kagi"],
             meta(name="viewport", content="width=device-width, initial-scale=1"),
             style[CSS],
         ],
         body[
-            h1["News from Kagi — By Topic"],
+            h1["News from Kagi"],
             (
                 (
                     h2[cluster["label"]],
