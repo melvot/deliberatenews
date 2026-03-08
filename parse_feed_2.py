@@ -16,7 +16,7 @@ url_date_from = "?from="+str(date_from)
 
 SYSTEM_PROMPT = """You are a news editor organizing a week of world news headlines into topic clusters.
 Your task:
-1. Identify duplicate/near-duplicate stories (same event, different phrasing, "Update:" variants). Keep only the most informative headline per duplicate group.
+1. Aggressively deduplicate: treat any headlines covering the same ongoing event as duplicates, even if details differ (e.g. casualty counts, named officials, incremental updates). Keep only the single most informative headline per event — typically the most recent or most comprehensive one. When in doubt, drop it.
 2. Group surviving unique headlines into coherent topic clusters.
 3. Give each cluster a concise, neutral label (3-7 words).
 Respond ONLY with JSON. No markdown fences, no explanation."""
@@ -30,10 +30,15 @@ Return a JSON object with this exact schema:
 
 Rules:
 - Each story_id appears in exactly ONE cluster.
-- Excluded story_ids are treated as deduplicated (dropped).
-- Aim for 6-15 clusters.
+- Excluded story_ids are treated as deduplicated (dropped). Exclude liberally.
+- A cluster should have at most 3-4 stories; if you have more, deduplicate further.
+- Aim for 8-12 clusters total.
 - Order clusters by significance (most important first).
 - Within each cluster, order story_ids chronologically (lowest ID first is fine)."""
+
+REORDER_PROMPT = """You are given a numbered list of news topic cluster labels.
+Reorder them so that thematically related topics are adjacent (e.g. all Middle East topics together, all US politics together, all economics together).
+Respond ONLY with a JSON array of the original indices in the new order, e.g. [2, 0, 4, 1, 3]. No explanation."""
 
 
 def getCategoryId(categories, selected_category):
@@ -78,7 +83,29 @@ def cluster_stories_with_ai(all_stories):
         messages=[{"role": "user", "content": user_prompt}],
     )
     raw_text = response.content[0].text
-    return parse_cluster_response(raw_text, all_stories)
+    clusters = parse_cluster_response(raw_text, all_stories)
+    return reorder_clusters(client, clusters)
+
+
+def reorder_clusters(client, clusters):
+    labels = "\n".join(f"{i}. {c['label']}" for i, c in enumerate(clusters))
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        system=REORDER_PROMPT,
+        messages=[{"role": "user", "content": labels}],
+    )
+    raw = response.content[0].text.strip()
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
+    if fenced:
+        raw = fenced.group(1)
+    order = json.loads(raw)
+    n = len(clusters)
+    valid_order = [i for i in order if isinstance(i, int) and 0 <= i < n]
+    # append any missing indices at the end
+    seen = set(valid_order)
+    valid_order += [i for i in range(n) if i not in seen]
+    return [clusters[i] for i in valid_order]
 
 
 def parse_cluster_response(raw_text, all_stories):
@@ -113,10 +140,11 @@ def parse_cluster_response(raw_text, all_stories):
         if not clean_ids:
             continue
 
-        result.append({
-            "label": label,
-            "stories": [all_stories[sid] for sid in clean_ids],
-        })
+        stories = sorted(
+            (all_stories[sid] for sid in clean_ids),
+            key=lambda s: (s["date"], s["id"]),
+        )
+        result.append({"label": label, "stories": stories})
 
     if not result:
         raise ValueError("No valid clusters in AI response")
