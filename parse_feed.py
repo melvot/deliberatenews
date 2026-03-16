@@ -16,8 +16,8 @@ url_date_from = "?from="+str(date_from)
 
 SYSTEM_PROMPT = """You are a news editor organizing a week of world news headlines into topic clusters.
 Your task:
-1. Aggressively deduplicate: treat any headlines covering the same ongoing event as duplicates, even if details differ (e.g. casualty counts, named officials, incremental updates). Keep only the single most informative headline per event — typically the most recent or most comprehensive one. When in doubt, drop it.
-2. Group surviving unique headlines into coherent topic clusters.
+1. Deduplicate ruthlessly. Drop ALL "Update:" headlines — they are always duplicates. For regular headlines, if two cover the same event (same strike, same vote, same election, same leader), keep only the single best one and drop the rest. When in doubt, drop.
+2. Group surviving unique headlines into named topic clusters.
 3. Give each cluster a concise, neutral label (3-7 words).
 Respond ONLY with JSON. No markdown fences, no explanation."""
 
@@ -29,15 +29,16 @@ Return a JSON object with this exact schema:
 {{"clusters": [{{"label": "Topic Label", "story_ids": [0, 1, 3, ...]}}]}}
 
 Rules:
-- Each story_id appears in exactly ONE cluster.
-- Excluded story_ids are treated as deduplicated (dropped). Exclude liberally.
-- A cluster should have at most 3-4 stories; if you have more, deduplicate further.
-- Aim for 8-12 clusters total.
-- Order clusters by significance (most important first).
+- Each story_id appears in exactly ONE cluster. Story IDs not in any cluster are silently dropped.
+- Drop ALL "Update:" headlines, no exceptions.
+- Hard limit: at most 2 stories per regular cluster. Drop the weaker ones if over.
+- "Miscellaneous events" is the final cluster. It holds at most 4 truly standalone stories that share no theme with any named cluster. If a story fits a named cluster, it goes there — not in Miscellaneous. If it fits nowhere and you already have 4 misc stories, drop it.
+- Aim for 8-12 clusters total (including "Miscellaneous events").
+- Order clusters by significance (most important first), with "Miscellaneous events" always last.
 - Within each cluster, order story_ids chronologically (lowest ID first is fine)."""
 
 REORDER_PROMPT = """You are given a numbered list of news topic cluster labels.
-Reorder them so that thematically related topics are adjacent (e.g. all Middle East topics together, all US politics together, all economics together).
+Reorder them so that thematically related topics are adjacent (e.g. all Middle East topics together, all US politics together, all economics together). "Miscellaneous events" must always be last.
 Respond ONLY with a JSON array of the original indices in the new order, e.g. [2, 0, 4, 1, 3]. No explanation."""
 
 
@@ -139,6 +140,18 @@ def parse_cluster_response(raw_text, all_stories):
 
         if not clean_ids:
             continue
+
+        # Drop "Update:" headlines — the AI sometimes ignores this instruction
+        clean_ids = [sid for sid in clean_ids
+                     if not all_stories[sid]["title"].startswith("Update:")]
+        # If all were Updates, keep the first one so the cluster isn't empty
+        if not clean_ids and raw_ids:
+            first = next((sid for sid in raw_ids if 0 <= sid < n), None)
+            if first is not None:
+                clean_ids = [first]
+
+        cap = 4 if label.lower() == "miscellaneous events" else 2
+        clean_ids = clean_ids[:cap]
 
         stories = sorted(
             (all_stories[sid] for sid in clean_ids),
