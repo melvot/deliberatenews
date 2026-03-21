@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import re
+import sys
 import requests
 import anthropic
 from datetime import datetime, timedelta
@@ -262,36 +263,49 @@ def makeHtml(clusters, previous_issue: str | None):
                                          nav_label="Latest issue")))
 
 
+CACHE_FILE = ".cache.json"
+
 if __name__ == "__main__":
     selected_category = "world"
+    use_cache = "--cached" in sys.argv
 
-    batches = getBatches()
-    story_batches = {}
-    all_stories = []
+    if use_cache and os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE) as f:
+            data = json.load(f)
+        all_stories = data["all_stories"]
+        story_batches = data["story_batches"]
+        print(f"Loaded {len(all_stories)} stories from cache.")
+    else:
+        batches = getBatches()
+        story_batches = {}
+        all_stories = []
 
-    print("Reading from API.", end='', flush=True)
-    for batch in batches:
-        categories = getCategories(batch)
-        batch_date = str(datetime.fromisoformat(batch['createdAt']).date())
-        story_batch = getStories(batch, categories, selected_category)
-        story_batches[batch_date] = story_batch
-        for story in story_batch["stories"]:
-            url = (
-                url_kagi
-                + str(story_batch["batchId"]) + "/"
-                + story_batch["categoryName"].lower() + "/"
-                + str(story["cluster_number"] - 1)
-            )
-            all_stories.append({
-                "id": len(all_stories),
-                "title": story["title"],
-                "url": url,
-                "date": batch_date,
-            })
-        print('.', end='', flush=True)
-    print('.')
+        print("Reading from API.", end='', flush=True)
+        for batch in batches:
+            categories = getCategories(batch)
+            batch_date = str(datetime.fromisoformat(batch['createdAt']).date())
+            story_batch = getStories(batch, categories, selected_category)
+            story_batches[batch_date] = story_batch
+            for story in story_batch["stories"]:
+                url = (
+                    url_kagi
+                    + str(story_batch["batchId"]) + "/"
+                    + story_batch["categoryName"].lower() + "/"
+                    + str(story["cluster_number"] - 1)
+                )
+                all_stories.append({
+                    "id": len(all_stories),
+                    "title": story["title"],
+                    "url": url,
+                    "date": batch_date,
+                })
+            print('.', end='', flush=True)
+        print('.')
 
-    print(f"Fetched {len(all_stories)} stories total.")
+        with open(CACHE_FILE, "w") as f:
+            json.dump({"all_stories": all_stories, "story_batches": story_batches}, f)
+
+        print(f"Fetched {len(all_stories)} stories total.")
 
     date_str = datetime.today().strftime("%Y-%m-%d")
     existing = sorted(f for f in glob.glob("docs/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].html")
