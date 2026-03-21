@@ -1,8 +1,12 @@
 import json
+import os
 import re
 import requests
 import anthropic
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
 from htpy import body, h1, h2, head, html, li, meta, title, ul, a, span, style
 
 url_kagi = "https://kite.kagi.com/"
@@ -235,14 +239,15 @@ def page_content(story_batches):
     ]
 
 def makeHtml(html_content: str):
-    date_today = datetime.today()
-    file_path = str(date_today)+"_"+"index.html"
-    try:
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-        print(f"Successfully wrote HTML to {file_path}")
-    except IOError as e:
-        print(f"Error writing to file: {e}")
+    os.makedirs("docs", exist_ok=True)
+    date_str = datetime.today().strftime("%Y-%m-%d")
+    for file_path in ["docs/index.html", f"docs/{date_str}.html"]:
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+            print(f"Successfully wrote HTML to {file_path}")
+        except IOError as e:
+            print(f"Error writing to file: {e}")
 
 
 if __name__ == "__main__":

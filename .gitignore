@@ -1,3 +1,5 @@
 __pycache__/
-rss/
-*_index.html
+.venv/
+.env
+docs/*.html
+!docs/index.html
