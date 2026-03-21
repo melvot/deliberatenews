@@ -1,5 +1,3 @@
 __pycache__/
 .venv/
 .env
-docs/*.html
-!docs/index.html

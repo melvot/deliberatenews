@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import re
@@ -7,7 +8,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
-from htpy import body, h1, h2, head, html, li, meta, title, ul, a, span, style
+from htpy import body, h1, h2, head, html, li, meta, title, ul, a, span, style, p
 
 url_kagi = "https://kite.kagi.com/"
 
@@ -171,24 +172,26 @@ def parse_cluster_response(raw_text, all_stories):
 
 CSS = """
     body { font-family: system-ui, sans-serif; max-width: 680px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-    h1   { font-size: 1.2rem; color: #555; font-weight: normal; margin-bottom: 2rem; }
+    h1   { font-size: 1.5rem; color: #555; font-weight: normal; margin-bottom: .5rem; }
     h2   { font-size: 1rem; text-transform: uppercase; letter-spacing: .05em; color: #888; margin: 2rem 0 .5rem; }
     ul   { margin: 0; padding: 0; list-style: none; }
     li   { padding: .35rem 0; border-bottom: 1px solid #eee; line-height: 1.4; }
     a    { color: #111; text-decoration: none; }
     a:hover { text-decoration: underline; }
     .date { font-size: .8rem; color: #aaa; white-space: nowrap; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: .85rem; color: #aaa; }
 """
 
-def page_content_clustered(clusters):
+def page_content_clustered(clusters, nav_url=None, nav_label=None):
     return html[
         head[
-            title["News from Kagi"],
+            title["Deliberate News"],
             meta(name="viewport", content="width=device-width, initial-scale=1"),
             style[CSS],
         ],
         body[
-            h1["News from Kagi"],
+            h1["Deliberate News"],
+            p[a(href=nav_url)[nav_label]] if nav_url else "",
             (
                 (
                     h2[cluster["label"]],
@@ -206,16 +209,16 @@ def page_content_clustered(clusters):
                     ]
                 )
                 for cluster in clusters
-            )
+            ),
         ]
     ]
 
 
 def page_content(story_batches):
     return html[
-        head[title["News from Kagi"]],
+        head[title["Deliberate News"]],
         body[
-            h1["News from Kagi"],
+            h1["Deliberate News"],
             (
                 (
                     h2[date],
@@ -238,16 +241,25 @@ def page_content(story_batches):
         ]
     ]
 
-def makeHtml(html_content: str):
+def writeFile(file_path: str, html_content: str):
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        print(f"Successfully wrote HTML to {file_path}")
+    except IOError as e:
+        print(f"Error writing to file: {e}")
+
+def makeHtml(clusters, previous_issue: str | None):
     os.makedirs("docs", exist_ok=True)
     date_str = datetime.today().strftime("%Y-%m-%d")
-    for file_path in ["docs/index.html", f"docs/{date_str}.html"]:
-        try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(html_content)
-            print(f"Successfully wrote HTML to {file_path}")
-        except IOError as e:
-            print(f"Error writing to file: {e}")
+    writeFile("docs/index.html",
+              str(page_content_clustered(clusters,
+                                         nav_url=previous_issue,
+                                         nav_label="Previous issue")))
+    writeFile(f"docs/{date_str}.html",
+              str(page_content_clustered(clusters,
+                                         nav_url="index.html",
+                                         nav_label="Latest issue")))
 
 
 if __name__ == "__main__":
@@ -281,12 +293,17 @@ if __name__ == "__main__":
 
     print(f"Fetched {len(all_stories)} stories total.")
 
+    date_str = datetime.today().strftime("%Y-%m-%d")
+    existing = sorted(f for f in glob.glob("docs/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].html")
+                      if os.path.basename(f) != f"{date_str}.html")
+    previous_issue = os.path.basename(existing[-1]) if existing else None
+
     try:
         clusters = cluster_stories_with_ai(all_stories)
         print(f"Clustered into {len(clusters)} topics.")
-        html_output = str(page_content_clustered(clusters))
+        makeHtml(clusters, previous_issue)
     except Exception as e:
         print(f"AI clustering failed ({e}), falling back to date view.")
-        html_output = str(page_content(story_batches))
-
-    makeHtml(html_output)
+        fallback = str(page_content(story_batches))
+        writeFile("docs/index.html", fallback)
+        writeFile(f"docs/{datetime.today().strftime('%Y-%m-%d')}.html", fallback)
