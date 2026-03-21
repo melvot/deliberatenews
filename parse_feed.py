@@ -195,7 +195,7 @@ def page_content_clustered(clusters, prev_url=None, latest_url=None):
             p[
                 (a(href=prev_url)["Previous issue"], "\u00a0\u00a0\u00a0|\u00a0\u00a0\u00a0") if prev_url and latest_url else (a(href=prev_url)["Previous issue"] if prev_url else ""),
                 a(href=latest_url)["Latest issue"] if latest_url else "",
-            ],
+            ] if prev_url or latest_url else "",
             (
                 (
                     h2[cluster["label"]],
