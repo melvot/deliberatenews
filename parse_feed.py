@@ -183,7 +183,7 @@ CSS = """
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: .85rem; color: #aaa; }
 """
 
-def page_content_clustered(clusters, nav_url=None, nav_label=None):
+def page_content_clustered(clusters, prev_url=None, latest_url=None):
     return html[
         head[
             title["Deliberate News"],
@@ -192,7 +192,10 @@ def page_content_clustered(clusters, nav_url=None, nav_label=None):
         ],
         body[
             h1["Deliberate News"],
-            p[a(href=nav_url)[nav_label]] if nav_url else "",
+            p[
+                (a(href=prev_url)["Previous issue"], "\u00a0\u00a0\u00a0|\u00a0\u00a0\u00a0") if prev_url and latest_url else (a(href=prev_url)["Previous issue"] if prev_url else ""),
+                a(href=latest_url)["Latest issue"] if latest_url else "",
+            ],
             (
                 (
                     h2[cluster["label"]],
@@ -255,12 +258,11 @@ def makeHtml(clusters, previous_issue: str | None):
     date_str = datetime.today().strftime("%Y-%m-%d")
     writeFile("docs/index.html",
               str(page_content_clustered(clusters,
-                                         nav_url=previous_issue,
-                                         nav_label="Previous issue")))
+                                         prev_url=previous_issue)))
     writeFile(f"docs/{date_str}.html",
               str(page_content_clustered(clusters,
-                                         nav_url="index.html",
-                                         nav_label="Latest issue")))
+                                         prev_url=previous_issue,
+                                         latest_url="index.html")))
 
 
 CACHE_FILE = ".cache.json"
