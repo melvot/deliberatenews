@@ -5,6 +5,9 @@ on:
     - cron: '0 8 * * 5'  # Every Friday at 8am UTC
   workflow_dispatch:       # Allow manual runs from the Actions tab
 
+permissions:
+  contents: write
+
 jobs:
   generate:
     runs-on: ubuntu-latest
